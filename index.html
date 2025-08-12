@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Age Calculator</title>
+<style>
+  :root{
+    --bg1:#141e30; --bg2:#243b55; --gold:#ffd700;
+    --glass: rgba(255,255,255,0.08);
+  }
+  html,body{height:100%; margin:0; font-family:'Segoe UI',sans-serif;}
+  body{
+    background: linear-gradient(135deg,var(--bg1),var(--bg2));
+    color:#fff; display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .container{
+    width:100%; max-width:420px;
+    background:var(--glass); padding:28px; border-radius:16px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.45); text-align:center; position:relative;
+    animation:fadeIn .7s ease;
+  }
+  /* language switch top-right */
+  .lang-switch{
+    position:absolute; top:-38px; right:0; display:flex; gap:6px;
+  }
+  .lang-btn{
+    background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.12);
+    padding:6px 8px; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px;
+  }
+  .lang-btn.active{ background: linear-gradient(90deg,var(--gold),#ffcc33); color:black; border:none; }
+
+  h1{ margin:0 0 16px; font-size:26px; color:var(--gold); letter-spacing:1px; }
+  input[type="date"]{
+    width:100%; padding:12px; border-radius:10px; border:none; background:rgba(255,255,255,0.08);
+    color:#fff; font-size:15px; outline:none; box-sizing:border-box;
+  }
+  .hint{ font-size:13px; color:rgba(255,255,255,0.7); margin:8px 0 4px; text-align:left; }
+
+  button.calc{
+    width:100%; margin-top:14px; padding:12px; font-size:16px; border-radius:10px; border:none;
+    background:linear-gradient(90deg,var(--gold),#ffcc33); color:#000; cursor:pointer;
+    transition:transform .12s ease;
+  }
+  button.calc:active{ transform:scale(.995); }
+
+  #result, #extra, #rashiBox, #birthdayCountdown {
+    margin-top:18px; opacity:0; transform:translateY(8px);
+    transition:all .35s ease; text-align:left; font-size:16px;
+  }
+  #result.show, #extra.show, #rashiBox.show, #birthdayCountdown.show{
+    opacity:1; transform:translateY(0);
+  }
+
+  .highlight{ color:var(--gold); font-weight:700; }
+  .fun-title{ font-weight:700; margin-bottom:6px; color:rgba(255,255,255,0.9); }
+
+  .extra{ background: rgba(0,0,0,0.18); padding:12px; border-radius:10px; font-size:14px; line-height:1.6; }
+  .rashi-row{ display:flex; gap:12px; align-items:center; margin-top:10px; }
+  .rashi-icon{
+    width:72px; height:72px; border-radius:12px; background:linear-gradient(135deg, rgba(255,255,255,0.03), rgba(0,0,0,0.15));
+    display:flex; align-items:center; justify-content:center; font-size:36px; color:var(--gold); box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  }
+  .share-btn{ display:none; margin-top:12px; width:100%; padding:10px; border-radius:10px; border:none;
+    background:linear-gradient(90deg,#00c851,#00a43c); color:#fff; font-weight:700; cursor:pointer;
+  }
+
+  .small{ font-size:14px; color:rgba(255,255,255,0.85); }
+
+  /* Birthday emoji animation */
+  @keyframes confettiFall {
+    0% { transform: translateY(-50px) rotate(0deg); opacity:1;}
+    100% { transform: translateY(150px) rotate(360deg); opacity:0;}
+  }
+  .confetti {
+    position: absolute;
+    font-size: 20px;
+    animation: confettiFall 1.5s linear forwards;
+    pointer-events:none;
+  }
+
+  /* Age counting scroll effect */
+  .count-scroll {
+    display: inline-block;
+    overflow: hidden;
+    height: 24px;
+    vertical-align: bottom;
+    position: relative;
+    width: 40px;
+  }
+  .count-scroll .numbers {
+    position: absolute;
+    top: 0;
+    animation-timing-function: ease-in-out;
+  }
+
+  @keyframes rollUp {
+    0% { top: 0;}
+    80% { top: -240px; }
+    100% { top: 0; }
+  }
+
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(-6px)} to{opacity:1; transform:none} }
+  @media (max-width:420px){ .rashi-icon{width:60px;height:60px;font-size:30px} }
+</style>
+</head>
+<body>
+  <div class="container" id="app">
+    <div class="lang-switch">
+      <button class="lang-btn active" data-lang="en" id="btn-en">EN</button>
+      <button class="lang-btn" data-lang="bn" id="btn-bn">বাংলা</button>
+      <button class="lang-btn" data-lang="hi" id="btn-hi">हिंदी</button>
+    </div>
+
+    <h1 id="title">Age Calculator</h1>
+
+    <div class="hint" id="hintLabel">Enter The Date of Birth</div>
+    <input type="date" id="dob" aria-label="Enter The Date of Birth" max="9999-12-31">
+
+    <button class="calc" id="calcBtn">Calculate Age</button>
+
+    <div id="result" aria-live="polite"></div>
+    <div id="birthdayCountdown" aria-live="polite"></div>
+    <div id="extra" class="extra"></div>
+    <div id="rashiBox"></div>
+    <button id="shareBtn" class="share-btn">Share with Friends</button>
+  </div>
+
+<script>
+// Language Data
+const LANGS = {
+  en: {title:"Age Calculator",hint:"Enter The Date of Birth",calc:"Calculate Age",funFacts:"Fun Facts:",hoursLived:"Hours lived",minutesLived:"Minutes lived",secondsLived:"Seconds lived",totalDaysSlept:"Total days slept (8 hrs/day)",totalYearsSlept:"Total years slept",yourRashi:"Your Rashi",dailyHoroscope:"Daily Horoscope",shareBtn:"Share with Friends",selectDob:"Please select your date of birth!",birthdayCountdown:"Days left to next birthday"},
+  bn: {title:"বয়স ক্যালকুলেটর",hint:"জন্ম তারিখ লিখুন",calc:"বয়স গণনা",funFacts:"মজার তথ্য:",hoursLived:"ঘন্টার জীবন",minutesLived:"মিনিট জীবন",secondsLived:"সেকেন্ড জীবন",totalDaysSlept:"মোট ঘুমের দিন (প্রতিদিন ৮ ঘন্টা)",totalYearsSlept:"মোট বছর ঘুমিয়েছে",yourRashi:"আপনার রাশি",dailyHoroscope:"দৈনিক রাশিফল",shareBtn:"শেয়ার করুন",selectDob:"অনুগ্রহ করে আপনার জন্ম তারিখ নির্বাচন করুন!",birthdayCountdown:"পরবর্তী জন্মদিন পর্যন্ত দিন"},
+  hi: {title:"Age Calculator",hint:"जन्म तिथि दर्ज करें",calc:"आयु निकालें",funFacts:"मज़ेदार तथ्य:",hoursLived:"जिए घंटे",minutesLived:"जिए मिनट",secondsLived:"जिए सेकंड",totalDaysSlept:"कुल सोए गए दिन (8 घं/दिन)",totalYearsSlept:"कुल साल सोए गए",yourRashi:"आपकी राशि",dailyHoroscope:"दैनिक राशिफल",shareBtn:"दोस्तों के साथ साझा करें",selectDob:"कृपया अपनी जन्मतिथि चुनें!",birthdayCountdown:"अगले जन्मदिन तक दिन"}
+};
+let currentLang = 'en';
+
+const RASHI_DATA = [
+  { key:'capricorn', name_en:'Makara (Capricorn)', symbol:'♑︎', start:[12,22], end:[1,19] },
+  { key:'aquarius',  name_en:'Kumbha (Aquarius)', symbol:'♒︎', start:[1,20],  end:[2,18] },
+  { key:'pisces',    name_en:'Meena (Pisces)',    symbol:'♓︎', start:[2,19],  end:[3,20] },
+  { key:'aries',     name_en:'Mesha (Aries)',     symbol:'♈︎', start:[3,21],  end:[4,19] },
+  { key:'taurus',    name_en:'Vrishabha (Taurus)',symbol:'♉︎', start:[4,20],  end:[5,20] },
+  { key:'gemini',    name_en:'Mithuna (Gemini)',  symbol:'♊︎', start:[5,21],  end:[6,20] },
+  { key:'cancer',    name_en:'Karka (Cancer)',    symbol:'♋︎', start:[6,21],  end:[7,22] },
+  { key:'leo',       name_en:'Simha (Leo)',       symbol:'♌︎', start:[7,23],  end:[8,22] },
+  { key:'virgo',     name_en:'Kanya (Virgo)',     symbol:'♍︎', start:[8,23],  end:[9,22] },
+  { key:'libra',     name_en:'Tula (Libra)',      symbol:'♎︎', start:[9,23],  end:[10,22] },
+  { key:'scorpio',   name_en:'Vrishchika (Scorpio)',symbol:'♏︎', start:[10,23], end:[11,21] },
+  { key:'sagittarius',name_en:'Dhanu (Sagittarius)',symbol:'♐︎', start:[11,22], end:[12,21] }
+];
+
+// Generate 100 positive messages per Rashi without numbering suffix
+function generateMessages(baseText){
+  const msgs = [];
+  for(let i=1; i<=100; i++){
+    msgs.push(baseText + " Keep shining!");
+  }
+  return msgs;
+}
+
+const HOROSCOPES = {
+  capricorn: {
+    en: generateMessages("Capricorn: Success and happiness await you today."),
+    bn: generateMessages("মকর: আজ আপনার জন্য সফলতা ও সুখ অপেক্ষা করছে।"),
+    hi: generateMessages("मकर: आज आपके लिए सफलता और खुशी प्रतीक्षा कर रही है।")
+  },
+  aquarius: {
+    en: generateMessages("Aquarius: Embrace new opportunities with confidence."),
+    bn: generateMessages("কুম্ভ: নতুন সুযোগকে আত্মবিশ্বাসের সঙ্গে গ্রহণ করুন।"),
+    hi: generateMessages("कुम्भ: आत्मविश्वास के साथ नए अवसरों को अपनाएं।")
+  },
+  pisces: {
+    en: generateMessages("Pisces: Creativity and joy will fill your day."),
+    bn: generateMessages("মীন: সৃজনশীলতা ও আনন্দ আপনার দিন পূর্ণ করবে।"),
+    hi: generateMessages("मीन: रचनात्मकता और खुशी आपके दिन को भर देगी।")
+  },
+  aries: {
+    en: generateMessages("Aries: Energy and enthusiasm will drive you forward."),
+    bn: generateMessages("মেষ: শক্তি এবং উৎসাহ আপনাকে এগিয়ে নিয়ে যাবে।"),
+    hi: generateMessages("मेष: ऊर्जा और उत्साह आपको आगे बढ़ाएंगे।")
+  },
+  taurus: {
+    en: generateMessages("Taurus: Patience and determination bring rewards."),
+    bn: generateMessages("বৃষ: ধৈর্য্য এবং সংকল্প পুরস্কার নিয়ে আসে।"),
+    hi: generateMessages("वृषभ: धैर्य और दृढ़ संकल्प पुरस्कार लाते हैं।")
+  },
+  gemini: {
+    en: generateMessages("Gemini: Communication opens new doors today."),
+    bn: generateMessages("মিথুন: যোগাযোগ আজ নতুন দরজা খুলবে।"),
+    hi: generateMessages("मिथुन: संचार आज नए द्वार खोलता है।")
+  },
+  cancer: {
+    en: generateMessages("Cancer: Your kindness will be returned manifold."),
+    bn: generateMessages("কর্কট: আপনার দয়া বহু গুণ ফিরে আসবে।"),
+    hi: generateMessages("कर्क: आपकी दयालुता कई गुना लौटेगी।")
+  },
+  leo: {
+    en: generateMessages("Leo: Leadership opportunities shine your way."),
+    bn: generateMessages("সিংহ: নেতৃত্বের সুযোগ আপনার পথে আলোকিত।"),
+    hi: generateMessages("सिंह: नेतृत्व के अवसर आपके रास्ते चमकेंगे।")
+  },
+  virgo: {
+    en: generateMessages("Virgo: Attention to detail brings success."),
+    bn: generateMessages("কন্যা: বিস্তারিত প্রতি মনোযোগ সফলতা আনে।"),
+    hi: generateMessages("कन्या: विस्तार पर ध्यान सफलता लाता है।")
+  },
+  libra: {
+    en: generateMessages("Libra: Balance and harmony fill your day."),
+    bn: generateMessages("তুলা: সামঞ্জস্য ও সঙ্গতি আপনার দিন পূর্ণ করবে।"),
+    hi: generateMessages("तुला: संतुलन और सद्भाव आपका दिन भर देंगे।")
+  },
+  scorpio: {
+    en: generateMessages("Scorpio: Passion and focus lead to achievement."),
+    bn: generateMessages("বৃশ্চিক: আবেগ ও ফোকাস সাফল্যে নিয়ে যায়।"),
+    hi: generateMessages("वृश्चिक: जुनून और ध्यान सफलता की ओर ले जाते हैं।")
+  },
+  sagittarius: {
+    en: generateMessages("Sagittarius: Adventure and learning await you."),
+    bn: generateMessages("ধনু: অভিযান ও শেখার অপেক্ষা করছে।"),
+    hi: generateMessages("धनु: साहसिक कार्य और सीखने का इंतजार है।")
+  }
+};
+
+const el = id=>document.getElementById(id);
+function t(k){ return LANGS[currentLang][k]; }
+function setLang(lang){
+  currentLang = lang;
+  el('title').innerText = t('title');
+  el('hintLabel').innerText = t('hint');
+  el('calcBtn').innerText = t('calc');
+  el('shareBtn').innerText = t('shareBtn');
+  el('birthdayCountdown').innerText = '';
+  document.querySelectorAll('.lang-btn').forEach(b=> b.classList.toggle('active', b.dataset.lang===lang));
+}
+setLang('en');
+document.querySelectorAll('.lang-btn').forEach(b=> b.addEventListener('click', ()=> setLang(b.dataset.lang)));
+
+function determineRashi(month, day){
+  for (let r of RASHI_DATA){
+    const start = r.start, end = r.end;
+    if (start[0] > end[0]){
+      if ((month === start[0] && day >= start[1]) || (month === end[0] && day <= end[1]) || (month > start[0]) || (month < end[0])) return r;
+    } else {
+      if ((month > start[0] || (month===start[0] && day>=start[1])) &&
+          (month < end[0] || (month===end[0] && day<=end[1]))) return r;
+    }
+  }
+  return RASHI_DATA[0];
+}
+
+// Animated number roll up - scroll effect for each number
+function createRollingNumber(finalNum, duration=1500){
+  // Create container with scrollable numbers 0-9 repeated multiple times for smooth roll
+  const container = document.createElement('span');
+  container.className = 'count-scroll';
+
+  const numbers = document.createElement('span');
+  numbers.className = 'numbers';
+
+  // Create numbers 0-9 repeated 4 times to scroll
+  for(let i=0; i<40; i++){
+    const num = document.createElement('div');
+    num.style.height = '24px';
+    num.style.lineHeight = '24px';
+    num.textContent = i%10;
+    numbers.appendChild(num);
+  }
+  container.appendChild(numbers);
+
+  // Animate the scroll up with CSS keyframes, then stop at correct digit
+  numbers.style.animation = `rollUp ${duration}ms ease-in-out forwards`;
+  // After animation ends, snap to final number position
+  setTimeout(()=>{
+    numbers.style.animation = '';
+    numbers.style.top = `-${finalNum * 24}px`;
+  }, duration);
+
+  return container;
+}
+
+// Sound effect - simple rolling sound using Web Audio API
+function playRollSound(duration=1500){
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioContext();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(200, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + duration/1000);
+
+    gainNode.gain.setValueAtTime(1.0, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.005, ctx.currentTime + duration/1000);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + duration/1000);
+
+    oscillator.onended = ()=>ctx.close();
+  } catch(e) {
+    // Audio not supported or error, ignore
+  }
+}
+
+el('calcBtn').addEventListener('click', onCalculate);
+el('shareBtn').addEventListener('click', shareResult);
+
+function getDailyHoroscope(signKey){
+  const msgs = HOROSCOPES[signKey]?.[currentLang] || [];
+  if(msgs.length===0) return "Horoscope unavailable.";
+  const dayIndex = Math.floor((new Date()).getTime() / 86400000) % msgs.length;
+  return msgs[dayIndex];
+}
+
+function onCalculate(){
+  const dobVal = el('dob').value;
+  const resDiv = el('result');
+  const extra = el('extra');
+  const rashiBox = el('rashiBox');
+  const birthdayCountdown = el('birthdayCountdown');
+  const share = el('shareBtn');
+
+  resDiv.classList.remove('show'); extra.classList.remove('show'); rashiBox.classList.remove('show'); birthdayCountdown.classList.remove('show');
+  share.style.display = 'none';
+  resDiv.innerHTML = ''; extra.innerHTML = ''; rashiBox.innerHTML = ''; birthdayCountdown.innerHTML = '';
+
+  if(!dobVal){
+    resDiv.innerText = t('selectDob');
+    resDiv.classList.add('show');
+    return;
+  }
+  const birth = new Date(dobVal);
+  if(isNaN(birth)) { resDiv.innerText = t('selectDob'); resDiv.classList.add('show'); return; }
+  const today = new Date();
+
+  let years = today.getFullYear() - birth.getFullYear();
+  let months = today.getMonth() - birth.getMonth();
+  let days = today.getDate() - birth.getDate();
+
+  if(days < 0){
+    months--;
+    const prevMonthDays = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
+    days += prevMonthDays;
+  }
+  if(months < 0){ years--; months += 12; }
+
+  // Play rolling sound and animate numbers
+  playRollSound(1500);
+
+  // Clear and prepare animated container for age
+  resDiv.innerHTML = `<div class="small">You are</div>
+                      <div style="font-size:18px; margin-top:6px;">
+                        <span class="highlight" id="yearsRoll"></span> years,
+                        <span class="highlight" id="monthsRoll"></span> months,
+                        <span class="highlight" id="daysRoll"></span> days
+                      </div>`;
+  resDiv.classList.add('show');
+
+  // Animate numbers rolling and then show final after 1.5s delay
+  const yEl = el('yearsRoll');
+  const mEl = el('monthsRoll');
+  const dEl = el('daysRoll');
+
+  // Insert rolling animations
+  yEl.appendChild(createRollingNumber(years));
+  mEl.appendChild(createRollingNumber(months));
+  dEl.appendChild(createRollingNumber(days));
+
+  // After 1.5s show final numbers cleanly
+  setTimeout(() => {
+    yEl.textContent = years;
+    mEl.textContent = months;
+    dEl.textContent = days;
+
+    // Show extra facts
+    const diffMs = today - birth;
+    const totalDays = Math.floor(diffMs / (1000*60*60*24));
+    const totalHours = totalDays * 24;
+    const totalMinutes = totalHours * 60;
+    const totalSeconds = totalMinutes * 60;
+    const totalDaysSlept = Math.floor(totalDays / 3);
+    const totalYearsSlept = ((totalDays / 3) / 365).toFixed(1);
+
+    extra.innerHTML = `<div class="fun-title">${t('funFacts')}</div>
+      ${t('hoursLived')}: <span class="highlight">${totalHours.toLocaleString()}</span><br>
+      ${t('minutesLived')}: <span class="highlight">${totalMinutes.toLocaleString()}</span><br>
+      ${t('secondsLived')}: <span class="highlight">${totalSeconds.toLocaleString()}</span><br>
+      ${t('totalDaysSlept')}: <span class="highlight">${totalDaysSlept.toLocaleString()}</span><br>
+      ${t('totalYearsSlept')}: <span class="highlight">${totalYearsSlept}</span>
+    `;
+    extra.classList.add('show');
+
+    // Rashi info
+    const r = determineRashi(birth.getMonth()+1, birth.getDate());
+    const iconHtml = `<div class="rashi-row" role="img" aria-label="${r.name_en}">
+        <div class="rashi-icon" aria-hidden="true">${r.symbol}</div>
+        <div style="flex:1">
+          <div style="font-weight:700">${r.name_en}</div>
+          <div class="small">${t('yourRashi')}</div>
+        </div>
+      </div>`;
+    const horoscopeMsg = getDailyHoroscope(r.key);
+    rashiBox.innerHTML = iconHtml + `<div id="horoscopeText" style="margin-top:10px;" class="small"><strong>${t('dailyHoroscope')}:</strong> ${horoscopeMsg}</div>`;
+    rashiBox.classList.add('show');
+
+    share.style.display = 'block';
+    share.classList.add('show');
+
+    // Show birthday countdown
+    showBirthdayCountdown(birth);
+  }, 1500);
+}
+
+// Birthday countdown + animation
+function showBirthdayCountdown(birthDate){
+  const today = new Date();
+  const thisYear = today.getFullYear();
+  let nextBirthday = new Date(thisYear, birthDate.getMonth(), birthDate.getDate());
+
+  if(nextBirthday < today) {
+    nextBirthday.setFullYear(thisYear + 1);
+  }
+
+  const diffTime = nextBirthday - today;
+  const diffDays = Math.ceil(diffTime / (1000*60*60*24));
+
+  const birthdayCountdown = el('birthdayCountdown');
+  birthdayCountdown.innerHTML = `<div style="font-weight:700; font-size:18px; color: var(--gold);">
+    🎉 ${t('birthdayCountdown')}: <span class="highlight">${diffDays}</span> day${diffDays !== 1 ? 's' : ''} 🎉
+  </div>`;
+  birthdayCountdown.classList.add('show');
+
+  // Confetti emoji animation
+  spawnConfetti(birthdayCountdown);
+}
+
+// Spawn confetti emojis falling
+function spawnConfetti(container){
+  const count = 15;
+  for(let i=0; i<count; i++){
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti';
+    confetti.style.left = (Math.random()*90) + '%';
+    confetti.style.animationDelay = (Math.random()*1.5) + 's';
+    confetti.textContent = ['🎉','🎂','🎈','🎁'][Math.floor(Math.random()*4)];
+    container.appendChild(confetti);
+    // Remove after animation
+    confetti.addEventListener('animationend', ()=> confetti.remove());
+  }
+}
+
+function shareResult(){
+  const rtxt = el('result').innerText.trim();
+  const etxt = el('extra').innerText.trim();
+  const rashi = el('rashiBox').innerText.trim();
+  const bday = el('birthdayCountdown').innerText.trim();
+  const text = `${rtxt}\n\n${etxt}\n\n${rashi}\n\n${bday}\n\nCheck yours: ${location.href}`;
+  if(navigator.share){
+    navigator.share({ title: 'Age Calculator', text, url: location.href }).catch(()=>{});
+  } else {
+    navigator.clipboard?.writeText(text).then(()=> alert('Result copied. Share to friends!'), ()=> alert('Sharing not supported'));
+  }
+}
+</script>
+</body>
+</html>
